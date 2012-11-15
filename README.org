@@ -5,8 +5,13 @@ The C++ application implemented a frame window and some common menu items.
 
 It uses [[http://www.cmake.org][CMake]] to create project files. So it supports all the modern IDEs and GNU Make.
 
--- Chen Bin
-
 * Key points
 - Work out of the box on Windows XP, OS X 10.7.3, Arch Linux
 - The bundle thing on OS X is properly done.
+
+* Contact me
+Please report bug at https://github.com/redguardtoo/new-wxproj/issues.
+
+My name is Chen Bin and my email is <chenbin DOT sh AT gmail DOT com>. My web site is [[http://binchen.org]].
+      
+      
