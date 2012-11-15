@@ -1,0 +1,348 @@
+#!/bin/bash
+if [ $# -eq 0 ]; then
+cat <<EOF
+Usage: new-wxproj app_name
+Step 1, Install cmake
+Step 2, cd app_name/build;cmake ..
+Step 2, Type `make' or open project files, depending on your system
+EOF
+   exit 1
+fi
+echo "Creating project $1 in current directory ..."
+mkdir -p $1/{build,doc,test,src}
+mkdir -p $1/src/{desktop,html}
+mkdir -p $1/src/desktop/frontend/rc # the main GUI, rc/ contains icons (.xpm)
+
+# project for root directory
+(
+cat <<EOF
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
+add_subdirectory(src)
+EOF
+) > $1/CMakeLists.txt
+
+# project for src
+(
+cat <<EOF
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
+add_subdirectory(desktop)
+add_subdirectory(html)
+EOF
+) > $1/src/CMakeLists.txt
+
+#project for desktop
+(
+cat <<EOF
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
+add_subdirectory(\${CMAKE_CURRENT_SOURCE_DIR}/frontend)
+EOF
+) > $1/src/desktop/CMakeLists.txt
+
+#project for html
+(
+cat <<EOF
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
+EOF
+) > $1/src/html/CMakeLists.txt
+
+#project for frontend
+(
+cat <<EOF
+PROJECT(main)
+CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
+
+set(PROJ_NAME main)
+set(TYPE "")
+
+set( CPP_SOURCES
+  main.cpp
+  main_frame.cpp
+  )
+
+set( H_SOURCES
+  main_frame.hpp
+  main.hpp
+  )
+
+set(SOURCES
+  \${CPP_SOURCES}
+  \${H_SOURCES}
+  )
+
+# xrc -> xml, adv, html
+# use internal jpeg/png lib because I can not compile it on linux.
+set(wxWidgets_USE_LIBS adv html core base)
+find_package(wxWidgets REQUIRED)
+include(\${wxWidgets_USE_FILE})
+
+
+set(INC
+  )
+
+if(UNIX AND NOT APPLE)
+  include(FindPkgConfig)
+  pkg_check_modules(GTK2 REQUIRED gtk+-2.0>=2.10)
+  set(INC \${INC} \${GTK2_INCLUDE_DIRS})
+endif()
+
+#add other librarie
+include_directories(\${INC})
+
+if(UNIX)
+  add_definitions(-Wno-write-strings)
+endif()
+
+if(WIN32)
+  # WIN32 := subsystem is windows instead of console?
+  set(TYPE WIN32)
+endif()
+
+if(APPLE)
+   set(TYPE MACOSX_BUNDLE)
+endif()
+
+add_executable(\${PROJ_NAME} \${TYPE} \${SOURCES})
+
+set(LIBS
+  \${wxWidgets_LIBRARIES}
+  )
+
+if(MINGW AND WIN32)
+  set(LIBS \${LIBS} ole32 uuid oleaut32)
+endif()
+target_link_libraries(\${PROJ_NAME} \${LIBS})
+EOF
+) > $1/src/desktop/frontend/CMakeLists.txt
+
+# main.cpp in frontend
+(
+cat <<EOF
+#include <wx/help.h>
+
+#include "main.hpp"
+#include "main_frame.hpp"
+
+// Create a new application object: this macro will allow wxWidgets to create
+// the application object during program execution (it's better than using a
+// static object for many reasons) and also declares the accessor function
+// wxGetApp() which will return the reference of the right type (i.e. the_app and
+// not wxApp).
+IMPLEMENT_APP(MyApp)
+
+bool MyApp::OnPreInit()
+{
+  return true;
+}
+
+bool MyApp::OnInit()
+{
+  if(!OnPreInit()){ return false; }
+
+  // call the base class initialization method, currently it only parses a
+  // few common command-line options but it could be do more in the future
+  if ( !wxApp::OnInit() )
+      return false;
+
+
+#ifdef __WXMSW__
+  m_helpController = new wxCHMHelpController();
+  //see $WXWIN/samples/help/doc/
+  //m_helpController->Initialize(CAppConfig::Get()->GetHelpFileName().GetFullPath());
+#else
+  m_helpController = new wxHelpController;
+#endif
+
+  /**
+  * code from src/common/msgout.cpp
+  * wxMessageOutput* wxMessageOutput::Set(wxMessageOutput* msgout)
+  * {
+  *    wxMessageOutput* old = ms_msgOut;
+  *    ms_msgOut = msgout;
+  *    return old;
+  * }
+  */
+
+  delete wxMessageOutput::Set(new wxMessageOutputDebug());
+
+
+  //before create any GUI, let's check if we use skin?
+
+  //OnAfterInit();
+  //frame will be released automatically in DeletePendingObjects()
+  frame=new MainFrame();
+
+  //set the shape again
+  SetTopWindow(frame);
+  frame->Center();
+
+  // Show the frame as it's created initially hidden.
+  frame->Show(true);
+  //frame->Maximize();
+
+#ifndef NDEBUG
+  wxRect rc=frame->GetRect();
+#endif
+
+  SetTopWindow(frame);
+  // Return true to tell program to continue (false would terminate).
+  return true;
+}
+
+void MyApp::OnAfterInit()
+{
+  return;
+}
+
+int MyApp::OnExit()
+{
+#ifdef __WXMSW__
+  m_helpController->Quit();
+  delete m_helpController;
+#endif
+
+  return(wxApp::OnExit());
+}
+
+MyApp::~MyApp()
+{
+}
+EOF
+) > $1/src/desktop/frontend/main.cpp
+
+# main.hpp in frontend
+(
+cat <<EOF
+#ifndef _MAIN_HPP_
+#define _MAIN_HPP_
+
+#include <wx/wx.h>             // wxApp
+
+class wxHelpControllerBase;
+class MainFrame;
+
+// Define a new application type, each program should derive a class from wxApp
+class MyApp : public wxApp
+{
+public:
+    // Override base class virtuals:
+    // wxApp::OnInit() is called on application startup and is a good place
+    // for the app initialization (doing it here and not in the ctor
+    // allows to have an error return: if OnInit() returns false, the
+    // application terminates)
+    virtual bool OnInit();
+
+    // called before OnInit() and before any window is created
+    bool OnPreInit();
+    void OnAfterInit();
+    virtual int OnExit();
+    ~MyApp();
+
+public:
+    MainFrame* frame;
+    wxHelpControllerBase *m_helpController;
+};
+
+DECLARE_APP(MyApp)
+
+#endif
+EOF
+) > $1/src/desktop/frontend/main.hpp
+
+# main_frame.hpp in frontend
+(
+cat <<EOF
+#ifndef _MAIN_FRAME_HPP
+#define _MAIN_FRAME_HPP
+
+#include <wx/wx.h>
+
+class MainFrame;
+
+class MainFrame:public wxFrame
+{
+public:
+    MainFrame();
+    ~MainFrame();
+    void InitGUI();
+private:
+    void OnExit(wxCommandEvent&);
+    void OnHelpContents(wxCommandEvent&);
+    wxMenuBar* CreateMenubar();
+private:
+    DECLARE_EVENT_TABLE()
+    wxMenuBar *_menubar;
+    wxSizer *_sz;
+};
+#endif
+EOF
+) > $1/src/desktop/frontend/main_frame.hpp
+
+# main_frame.cpp in frontend
+(
+cat <<EOF
+
+#define APP_NAME "pdf2web"
+
+#include <wx/wx.h>
+
+#include "main_frame.hpp"
+
+//-------------------------------
+// class MainFrame
+//-------------------------------
+BEGIN_EVENT_TABLE(MainFrame, wxFrame)
+    EVT_MENU(wxID_EXIT,MainFrame::OnExit)
+    EVT_MENU(wxID_HELP_CONTENTS,MainFrame::OnHelpContents)
+END_EVENT_TABLE()
+
+//--------------------------------------------------
+// Public method
+//--------------------------------------------------
+MainFrame::MainFrame():wxFrame(0,wxID_ANY,wxEmptyString),_sz(0)
+{
+
+    _sz=new wxBoxSizer(wxVERTICAL);
+    _menubar=new wxMenuBar();
+
+    wxMenu* fileMenu=new wxMenu();
+    fileMenu->Append(new wxMenuItem(fileMenu,wxID_EXIT,
+            _("E&xit"),wxEmptyString,wxITEM_NORMAL));
+    _menubar->Append(fileMenu,_("&File"));
+
+    wxMenu *viewMenu=new wxMenu();
+    viewMenu->Append(new wxMenuItem(viewMenu,wxID_VIEW_LIST,
+            _("My &Gallery"),wxEmptyString,wxITEM_NORMAL));
+    _menubar->Append(viewMenu,_("&View"));
+
+    wxMenu* helpMenu=new wxMenu();
+    helpMenu->Append(new wxMenuItem(helpMenu,wxID_ANY,
+            wxString::Format(_("&About %s..."),_(APP_NAME)),
+            wxEmptyString,wxITEM_NORMAL));
+    helpMenu->Append(new wxMenuItem(helpMenu,wxID_HELP_CONTENTS,
+            _("&Contents"), wxEmptyString,wxITEM_NORMAL));
+    _menubar->Append(helpMenu,_("&Help"));
+
+    SetMenuBar(_menubar);
+
+    Layout();
+    return;
+}
+
+MainFrame::~MainFrame()
+{
+}
+
+void MainFrame::OnExit(wxCommandEvent& WXUNUSED(event))
+{
+    Close();
+    return;
+}
+
+void MainFrame::OnHelpContents(wxCommandEvent& WXUNUSED(event))
+{
+    return;
+}
+EOF
+) > $1/src/desktop/frontend/main_frame.cpp
+
+echo "DONE!"

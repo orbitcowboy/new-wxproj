@@ -1,0 +1,12 @@
+* Introduction
+A bash script to create a minimum C++ application written in [[http://wxwidgets.org][wxWidgets]] in current working directory.
+
+The C++ application implemented a frame window and some common menu items.
+
+It uses [[http://www.cmake.org][CMake]] to create project files. So it supports all the modern IDEs and GNU Make.
+
+-- Chen Bin
+
+* Key points
+- Work out of the box on Windows XP, OS X 10.7.3, Arch Linux
+- The bundle thing on OS X is properly done.
